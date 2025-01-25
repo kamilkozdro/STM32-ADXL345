@@ -1,5 +1,8 @@
 
-#include "stm32l1xx_hal.h"
+#ifndef ADXL345_H
+#define ADXL345_H
+
+#include "stm32f3xx_hal.h"
 
 #define ADXL_REG_DEVID					0x00	// Device ID
 #define ADXL_REG_THRESH_TAP				0x1D	// Tap threshold
@@ -33,7 +36,6 @@
 #define ADXL_REG_FIFO_STATUS			0x39	// FIFO status
 
 #define ADXL_BW_RATE_LOW_POWER_BIT		4		// 0 - Normal operation; 1 - Reduced power operation
-#define ADXL_BW_RATE_100				0x0A	// Default device bandwidth and output rate - 100 Hz
 
 #define ADXL_POWER_MODE_NORMAL			0
 #define ADXL_POWER_MODE_LOW				1
@@ -42,10 +44,10 @@
 #define ADXL_POWER_CTL_AUTO_SLEEP_BIT	4
 #define ADXL_POWER_CTL_MEASURE_BIT		3		// Standby mode - 0; Measurement mode - 1
 #define ADXL_POWER_CTL_SLEEP_BIT		2
-#define ADXL_POWER_CTL_WAKEUP_8_VALUE	0		// 8Hz
-#define ADXL_POWER_CTL_WAKEUP_4_VALUE	0		// 4Hz
-#define ADXL_POWER_CTL_WAKEUP_2_VALUE	0		// 2Hz
-#define ADXL_POWER_CTL_WAKEUP_1_VALUE	0		// 1Hz
+#define ADXL_POWER_CTL_WAKEUP_8			0		// 8Hz
+#define ADXL_POWER_CTL_WAKEUP_4			1		// 4Hz
+#define ADXL_POWER_CTL_WAKEUP_2			2		// 2Hz
+#define ADXL_POWER_CTL_WAKEUP_1			3		// 1Hz
 
 #define ADXL_INT_ENABLE_DATA_READY_BIT	7
 #define ADXL_INT_ENABLE_SINGLE_TAP_BIT	6
@@ -97,12 +99,40 @@
 #define ADXL_JUSTIFY_MSB				1
 
 
+
+
+#define ADXL_BW_RATE_1600				0x0E
+#define ADXL_BW_RATE_800				0x0D
+#define ADXL_BW_RATE_400				0x0C
+#define ADXL_BW_RATE_200				0x0B
+#define ADXL_BW_RATE_100				0x0A
+#define ADXL_BW_RATE_50					0x09
+#define ADXL_BW_RATE_25					0x08
+
+#define ADXL_READ						0x80
+#define ADXL_MULTIPLEBYTE_READ			0x40
+
+#define ADXL_TRANSMISSION_TIMEOUT		50
+
+#define ADXL_DEVICE_ID					0xE5
+
+typedef enum
+{
+	ADXL_OK	= 		0x00U,
+	ADXL_ERROR = 	0x01U
+}ADXL_StatusTypeDef;
+
 typedef struct
 {
+	GPIO_TypeDef* CS_Port;
+	uint32_t CS_Pin;
+	SPI_HandleTypeDef* hspi;
 	uint8_t spiMode;
 	uint8_t intInvert;
 	uint8_t resMode;
 	uint8_t justify;
+	uint8_t range;
+	uint8_t bwRate;
 }ADXL_InitTypeDef;
 
 typedef struct
@@ -110,14 +140,25 @@ typedef struct
 	GPIO_TypeDef* CS_Port;
 	uint32_t CS_Pin;
 	SPI_HandleTypeDef* hspi;
-}ADXL_Unit;
+	float gain;
+}ADXL_HandleTypeDef;
 
-void adxlWrite(uint8_t regAddr, uint8_t* dataToWrite);
-void adxlRead(uint8_t regAddr, uint8_t* readBuffer, size_t dataLength);
-void adxlInit();
-void adxlStandby();
-void adxlMeasure();
-void adxlSleep();
+static void adxlWrite(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t dataToWrite);
+static void adxlRead(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t* readBuffer, size_t dataLength);
+ADXL_StatusTypeDef adxlInit(ADXL_HandleTypeDef* adxlHandler, ADXL_InitTypeDef* adxlInitType);
+void adxlStandby(ADXL_HandleTypeDef* adxlHandler);
+void adxlMeasure(ADXL_HandleTypeDef* adxlHandler);
+void adxlSleep(ADXL_HandleTypeDef* adxlHandler);
+void adxlGetAccel(ADXL_HandleTypeDef* adxlHandler, float accel[3]);
+
+#endif
+
+
+
+
+
+
+
 
 
 
