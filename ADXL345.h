@@ -3,6 +3,7 @@
 #define ADXL345_H
 
 #include "stm32f3xx_hal.h"
+#include <math.h>
 
 #define ADXL_REG_DEVID					0x00	// Device ID
 #define ADXL_REG_THRESH_TAP				0x1D	// Tap threshold
@@ -98,9 +99,7 @@
 #define ADXL_JUSTIFY_SIGNED				0
 #define ADXL_JUSTIFY_MSB				1
 
-
-
-
+#define ADXL_BW_RATE_3200				0x0F
 #define ADXL_BW_RATE_1600				0x0E
 #define ADXL_BW_RATE_800				0x0D
 #define ADXL_BW_RATE_400				0x0C
@@ -124,15 +123,16 @@ typedef enum
 
 typedef struct
 {
-	GPIO_TypeDef* CS_Port;
-	uint32_t CS_Pin;
-	SPI_HandleTypeDef* hspi;
-	uint8_t spiMode;
-	uint8_t intInvert;
-	uint8_t resMode;
-	uint8_t justify;
-	uint8_t range;
-	uint8_t bwRate;
+	GPIO_TypeDef* CS_Port;				// STM32 port of pin assigned to ADXL CS pin
+	uint32_t CS_Pin;					// STM32 pin assigned to ADXL CS pin
+	SPI_HandleTypeDef* hspi;			// SPI handler from config
+	uint8_t spiMode;					// ADXL_SPI_MODE_ ...
+	uint8_t intInvert;					// ADXL_INT_INVERT_ ...
+	uint8_t resMode;					// ADXL_RES_MODE_ ...
+	uint8_t justify;					// ADXL_JUSTIFY_ ...
+	uint8_t range;						// ADXL_DATA_FORMAT_RANGE_ ...
+	uint8_t bwRate;						// ADXL_BW_RATE_ ...
+	uint8_t powerMode;					// ADXL_POWER_MODE_ ...
 }ADXL_InitTypeDef;
 
 typedef struct
@@ -146,10 +146,13 @@ typedef struct
 static void adxlWrite(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t dataToWrite);
 static void adxlRead(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t* readBuffer, size_t dataLength);
 ADXL_StatusTypeDef adxlInit(ADXL_HandleTypeDef* adxlHandler, ADXL_InitTypeDef* adxlInitType);
+ADXL_StatusTypeDef adxlInitDefault(ADXL_HandleTypeDef* adxlHandler, GPIO_TypeDef* CS_GPIOPort, uint16_t CS_GPIOPin, SPI_HandleTypeDef* spiHandler);
 void adxlStandby(ADXL_HandleTypeDef* adxlHandler);
 void adxlMeasure(ADXL_HandleTypeDef* adxlHandler);
-void adxlSleep(ADXL_HandleTypeDef* adxlHandler);
+void adxlSleep(ADXL_HandleTypeDef* adxlHandler, uint8_t powerCTLWakeup);
 void adxlGetAccel(ADXL_HandleTypeDef* adxlHandler, float accel[3]);
+void adxlSetOffsets(ADXL_HandleTypeDef* adxlHandler, int8_t OffsetX, int8_t OffsetY, int8_t OffsetZ);
+uint8_t adxlReadRegister(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr);
 
 #endif
 
