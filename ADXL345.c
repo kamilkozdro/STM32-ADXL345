@@ -7,11 +7,12 @@
 
 #include "ADXL345.h"
 
+/* ***** Private functions ***** */
 
-static void adxlWrite(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t dataToWrite)
+static void adxlWrite(ADXL_HandleTypeDef* adxlHandler, ADXL_Reg adxlReg, uint8_t dataToWrite)
 {
 	uint8_t writeBuffer[2] = {0,0};
-	writeBuffer[0] = regAddr|ADXL_MULTIPLEBYTE_READ;
+	writeBuffer[0] = adxlReg|ADXL_MULTIPLEBYTE_READ;
 	writeBuffer[1] = dataToWrite;
 
 	HAL_GPIO_WritePin(adxlHandler->CS_Port, adxlHandler->CS_Pin, GPIO_PIN_RESET);
@@ -19,16 +20,18 @@ static void adxlWrite(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t 
 	HAL_GPIO_WritePin(adxlHandler->CS_Port, adxlHandler->CS_Pin, GPIO_PIN_SET);
 }
 
-static void adxlRead(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr, uint8_t* readBuffer, size_t dataLength)
+static void adxlRead(ADXL_HandleTypeDef* adxlHandler, ADXL_Reg adxlReg, uint8_t* readBuffer, size_t dataLength)
 {
-	regAddr |= ADXL_READ;
-	regAddr |= ADXL_MULTIPLEBYTE_READ;
+	adxlReg |= ADXL_READ;
+	adxlReg |= ADXL_MULTIPLEBYTE_READ;
 
 	HAL_GPIO_WritePin(adxlHandler->CS_Port, adxlHandler->CS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(adxlHandler->hspi, &regAddr, sizeof(regAddr), ADXL_TRANSMISSION_TIMEOUT);
+	HAL_SPI_Transmit(adxlHandler->hspi, &adxlReg, sizeof(adxlReg), ADXL_TRANSMISSION_TIMEOUT);
 	HAL_SPI_Receive(adxlHandler->hspi, readBuffer, dataLength, ADXL_TRANSMISSION_TIMEOUT);
 	HAL_GPIO_WritePin(adxlHandler->CS_Port, adxlHandler->CS_Pin, GPIO_PIN_SET);
 }
+
+/* ***** Public functions ***** */
 
 ADXL_StatusTypeDef adxlInit(ADXL_HandleTypeDef* adxlHandler, ADXL_InitTypeDef* adxlInitType)
 {
@@ -37,55 +40,44 @@ ADXL_StatusTypeDef adxlInit(ADXL_HandleTypeDef* adxlHandler, ADXL_InitTypeDef* a
 	adxlHandler->hspi = adxlInitType->hspi;
 
 	HAL_GPIO_WritePin(adxlHandler->CS_Port, adxlHandler->CS_Pin, GPIO_PIN_SET);
-	// TODO: CHECK IF THIS DELAY IS NECESSARY
-	HAL_Delay(5);
 	uint8_t deviceID = 0;
 	adxlRead(adxlHandler, ADXL_REG_DEVID, &deviceID, sizeof(deviceID));
 	if(deviceID != ADXL_DEVICE_ID)
-	{
-		// TODO: REPORT ADXL COMM ERROR
 		return ADXL_ERROR;
-	}
-
 	adxlStandby(adxlHandler);
 
-	// Setting BW
+	/* --- Setting Bandwidth and PowerMode --- */
 	uint8_t writeBuffer = 0;
 	if(adxlInitType->powerMode == ADXL_POWER_MODE_LOW && adxlInitType->bwRate > ADXL_BW_RATE_400)
 		adxlInitType->bwRate = ADXL_BW_RATE_200;
-
-	if(adxlInitType->bwRate > ADXL_BW_RATE_3200)
-		adxlInitType->bwRate = ADXL_BW_RATE_3200;
-
 	writeBuffer = adxlInitType->bwRate;
-	writeBuffer |= (1 << ADXL_BW_RATE_LOW_POWER_BIT);
+	if(adxlInitType->powerMode == ADXL_POWER_MODE_LOW)
+			writeBuffer |= (1 << ADXL_BW_RATE_LOW_POWER_BIT);
 	adxlWrite(adxlHandler, ADXL_REG_BW_RATE, writeBuffer);
 
-	// Setting DATAFORMAT
+	/* --- Setting DataFormat --- */
 	writeBuffer = 0;
 	writeBuffer = (adxlInitType->spiMode << ADXL_DATA_FORMAT_SPI_BIT)
 					| (adxlInitType->intInvert << ADXL_DATA_FORMAT_INT_INVERT_BIT)
 					| (adxlInitType->resMode << ADXL_DATA_FORMAT_FULL_RES_BIT)
 					| (adxlInitType->justify << ADXL_DATA_FORMAT_JUSTIFY_BIT);
-	writeBuffer += adxlInitType->range;
+	writeBuffer += adxlInitType->dataFormatRange;
 	adxlWrite(adxlHandler, ADXL_REG_DATA_FORMAT, writeBuffer);
-
-
 
 	if (adxlInitType->resMode == ADXL_RES_MODE_10BIT)
 	{
-		switch (adxlInitType->range)
+		switch (adxlInitType->dataFormatRange)
 		{
-			case ADXL_DATA_FORMAT_RANGE_2:
+			case ADXL_DATA_FORMAT_RANGE_2G:
 				adxlHandler->gain = 1/255.0f;
 				break;
-			case ADXL_DATA_FORMAT_RANGE_4:
+			case ADXL_DATA_FORMAT_RANGE_4G:
 				adxlHandler->gain = 1/127.0f;
 				break;
-			case ADXL_DATA_FORMAT_RANGE_8:
+			case ADXL_DATA_FORMAT_RANGE_8G:
 				adxlHandler->gain = 1/63.0f;
 				break;
-			case ADXL_DATA_FORMAT_RANGE_16:
+			case ADXL_DATA_FORMAT_RANGE_16G:
 				adxlHandler->gain = 1/31.0f;
 				break;
 		}
@@ -102,7 +94,7 @@ ADXL_StatusTypeDef adxlInitDefault(ADXL_HandleTypeDef* adxlHandler, GPIO_TypeDef
 	  adxlInitType.bwRate = ADXL_BW_RATE_100;
 	  adxlInitType.intInvert = ADXL_INT_INVERT_HIGH;
 	  adxlInitType.justify = ADXL_JUSTIFY_SIGNED;
-	  adxlInitType.range = ADXL_DATA_FORMAT_RANGE_2;
+	  adxlInitType.dataFormatRange = ADXL_DATA_FORMAT_RANGE_2G;
 	  adxlInitType.resMode = ADXL_RES_MODE_10BIT;
 	  adxlInitType.spiMode = ADXL_SPI_MODE_4WIRE;
 	  adxlInitType.CS_Port = CS_GPIOPort;
@@ -113,7 +105,6 @@ ADXL_StatusTypeDef adxlInitDefault(ADXL_HandleTypeDef* adxlHandler, GPIO_TypeDef
 		  return ADXL_ERROR;
 
 	  return ADXL_OK;
-
 }
 
 void adxlStandby(ADXL_HandleTypeDef* adxlHandler)
@@ -121,27 +112,55 @@ void adxlStandby(ADXL_HandleTypeDef* adxlHandler)
 	adxlWrite(adxlHandler, ADXL_REG_POWER_CTL, 0);
 }
 
-/*
- *	Call adxlSleep() before setting ADXL to Measure mode;
- */
 void adxlMeasure(ADXL_HandleTypeDef* adxlHandler)
 {
 	adxlWrite(adxlHandler, ADXL_REG_POWER_CTL, (1 << ADXL_POWER_CTL_MEASURE_BIT));
 }
 
-void adxlSleep(ADXL_HandleTypeDef* adxlHandler, uint8_t powerCTLWakeup)
+//
+void adxlSleep(ADXL_HandleTypeDef* adxlHandler, ADXL_PowerCTLWakeupType powerCTLWakeup)
 {
 	uint8_t writeBuf = 0;
 
-	if(powerCTLWakeup > ADXL_POWER_CTL_WAKEUP_8)
-		powerCTLWakeup = ADXL_POWER_CTL_WAKEUP_8;
+	adxlWrite(adxlHandler, ADXL_REG_POWER_CTL, 0);	// Enter standby mode to ensure that the device is properly biased (according to doc)
 
 	writeBuf = powerCTLWakeup;
+	writeBuf |= (1 << ADXL_POWER_CTL_MEASURE_BIT);
 	writeBuf |= (1 << ADXL_POWER_CTL_SLEEP_BIT);
 	adxlWrite(adxlHandler, ADXL_REG_POWER_CTL, writeBuf);
+
+
 }
 
-void adxlGetAccel(ADXL_HandleTypeDef* adxlHandler, float accel[3])
+float_t adxlGet1AxisAccel(ADXL_HandleTypeDef* adxlHandler, ADXL_Axis adxlAxis)
+{
+	uint8_t readBuffer[2] = {0,0};
+	int16_t accelReadVal = 0;
+	float_t fAccelReadVal = 0;
+	ADXL_Reg adxlAxisReg = ADXL_REG_DATAX0;
+
+	switch(adxlAxis)
+	{
+		case ADXL_AXIS_X:
+			adxlAxisReg = ADXL_REG_DATAX0;
+			break;
+		case ADXL_AXIS_Y:
+			adxlAxisReg = ADXL_REG_DATAY0;
+			break;
+		case ADXL_AXIS_Z:
+			adxlAxisReg = ADXL_REG_DATAZ0;
+			break;
+	}
+
+
+	adxlRead(adxlHandler, adxlAxisReg, readBuffer, sizeof(readBuffer));
+	accelReadVal = readBuffer[1] << 8 | readBuffer[0];
+	fAccelReadVal = (float_t)accelReadVal*adxlHandler->gain;
+
+	return fAccelReadVal;
+}
+
+void adxlGet3AxisAccel(ADXL_HandleTypeDef* adxlHandler, float_t (*accel)[3])
 {
 	uint8_t readBuffer[6] = {0,0,0,0,0,0};
 
@@ -151,9 +170,9 @@ void adxlGetAccel(ADXL_HandleTypeDef* adxlHandler, float accel[3])
 	int16_t y = readBuffer[3] << 8 | readBuffer[2];
 	int16_t z = readBuffer[5] << 8 | readBuffer[4];
 
-	accel[0] = (float)x*adxlHandler->gain;
-	accel[1] = (float)y*adxlHandler->gain;
-	accel[2] = (float)z*adxlHandler->gain;
+	(*accel)[0] = (float_t)x*adxlHandler->gain;
+	(*accel)[1] = (float_t)y*adxlHandler->gain;
+	(*accel)[2] = (float_t)z*adxlHandler->gain;
 
 }
 
@@ -161,11 +180,11 @@ void adxlGetAccel(ADXL_HandleTypeDef* adxlHandler, float accel[3])
  * 	Max offset = +/-1981 mg
  */
 
-void adxlSetOffsets(ADXL_HandleTypeDef* adxlHandler, int OffsetX, int OffsetY, int OffsetZ)
+void adxlSetOffsets(ADXL_HandleTypeDef* adxlHandler, int16_t OffsetX, int16_t OffsetY, int16_t OffsetZ)
 {
-	const float scaleFactor = 15.6;
-	const int maxOffset = 1981;
-	const int minOffset = -1981;
+	const float_t scaleFactor = 15.6;
+	const int16_t maxOffset = 1981;
+	const int16_t minOffset = -1981;
 
 	OffsetX = OffsetX < minOffset ? minOffset : OffsetX;
 	OffsetX = OffsetX > maxOffset ? maxOffset : OffsetX;
@@ -180,10 +199,10 @@ void adxlSetOffsets(ADXL_HandleTypeDef* adxlHandler, int OffsetX, int OffsetY, i
 	adxlWrite(adxlHandler, ADXL_REG_OFSZ, (uint8_t)roundf(OffsetZ/scaleFactor));
 }
 
-uint8_t adxlReadRegister(ADXL_HandleTypeDef* adxlHandler, uint8_t regAddr)
+uint8_t adxlReadRegister(ADXL_HandleTypeDef* adxlHandler, ADXL_Reg adxlReg)
 {
 	uint8_t readBuffer = 0;
-	adxlRead(adxlHandler, regAddr, &readBuffer, sizeof(readBuffer));
+	adxlRead(adxlHandler, adxlReg, &readBuffer, sizeof(readBuffer));
 	return readBuffer;
 }
 
